@@ -1,0 +1,2533 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Jakość powietrza WFiIS AGH</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Hanken+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+    color-scheme: dark;
+    /* Kierunek „atmosferyczny panel pomiarowy": kolor koduje jakość powietrza (skala AQI),
+       nie dekorację. Świadome odejście od generycznego near-black + neonowy cyan. */
+    --bg: #0c0f14;
+    --surface: #14181f;
+    --surface-soft: #1c222b;
+    --surface-bright: rgba(255,255,255,0.07);
+    --text: #eceef2;
+    --muted: #98a0ad;
+    --accent: #79b4d4;          /* spokojny błękit „powietrza" — elementy interaktywne */
+    --accent-strong: #a9d2e8;
+    --border: rgba(255,255,255,0.10);
+    --shadow: 0 28px 80px rgba(0, 0, 0, 0.45);
+
+    /* Skala AQI — kolory ZNACZENIOWE (poziomy PM10) */
+    --aqi-good: #57c08a;        /* ≤ norma dobowa (50) */
+    --aqi-mod: #e8c45c;         /* poziom informowania (100) */
+    --aqi-bad: #e8915c;
+    --aqi-alarm: #e0556b;       /* poziom alarmowy (150) */
+    --aqi-extreme: #b95cc4;
+
+    /* Typografia — display + body + mono (dane czujników) */
+    --font-display: "Space Grotesk", "Hanken Grotesk", system-ui, sans-serif;
+    --font-body: "Hanken Grotesk", Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html {
+    font-family: var(--font-body);
+    font-size: 16px;
+    scroll-behavior: smooth;
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    /* Atmosferyczna „mgła": chłodny powiew powietrza u góry + ledwo widoczny ciepły ton smogu */
+    background:
+      radial-gradient(1200px 520px at 72% -12%, rgba(121,180,212,0.10), transparent 60%),
+      radial-gradient(900px 600px at 2% 2%, rgba(224,85,107,0.05), transparent 55%),
+      linear-gradient(180deg, #0c0f14 0%, #0e1218 100%);
+    background-attachment: fixed;
+    color: var(--text);
+}
+
+a {
+    color: inherit;
+    text-decoration: none;
+}
+
+img {
+    max-width: 100%;
+    display: block;
+}
+
+.page-shell {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 24px 24px 40px;
+}
+
+.site-header {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 18px;
+    margin-bottom: 24px;
+}
+
+.brand-panel {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+}
+
+.brand-mark {
+    width: 60px;
+    height: 60px;
+    border-radius: 18px;
+    display: grid;
+    place-content: center;
+    font-weight: 800;
+    color: #08181f;
+    background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+    font-size: 1.15rem;
+}
+
+.brand-panel h1 {
+    margin: 0;
+    font-size: clamp(2.1rem, 3vw, 3.4rem);
+    line-height: 1.02;
+}
+
+.brand-panel p {
+    margin: 8px 0 0;
+    color: var(--muted);
+    max-width: 52rem;
+}
+
+.site-nav {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
+.site-nav a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 18px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    background: rgba(255,255,255,0.06);
+    color: var(--text);
+    font-weight: 600;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.site-nav a:hover {
+    border-color: rgba(121,180,212,0.24);
+    background: rgba(121,180,212,0.12);
+}
+
+.hero-card,
+.stats-panel,
+.summary-card,
+.plots-card,
+.forecast-card,
+.table-card {
+    background: rgba(18, 30, 56, 0.94);
+    border: 1px solid var(--border);
+    border-radius: 28px;
+    box-shadow: var(--shadow);
+    padding: 32px;
+    backdrop-filter: blur(16px);
+    margin-bottom: 24px;
+}
+
+.hero-card {
+    display: grid;
+    grid-template-columns: 1.7fr 1.1fr;
+    gap: 26px;
+    align-items: stretch;
+}
+
+.eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--accent);
+    font-size: 0.88rem;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    margin-bottom: 18px;
+}
+
+.hero-copy h2,
+.section-intro h2 {
+    margin: 0;
+    font-size: clamp(2rem, 3vw, 3.2rem);
+    line-height: 1.02;
+}
+
+.hero-copy p,
+.panel-copy p,
+.section-intro p,
+.summary-card p {
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.8;
+}
+
+.hero-actions {
+    margin-top: 30px;
+    display: grid;
+    gap: 18px;
+}
+
+.file-label {
+    display: block;
+    margin-bottom: 10px;
+    color: var(--text);
+    font-weight: 600;
+}
+
+.file-input {
+    width: 100%;
+    padding: 14px 16px;
+    border-radius: 16px;
+    border: 1px solid rgba(255,255,255,0.14);
+    background: rgba(255,255,255,0.04);
+    color: var(--text);
+}
+
+.primary-button,
+.secondary-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 16px;
+    cursor: pointer;
+    font-weight: 700;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.primary-button {
+    background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+    color: #08181f;
+    padding: 16px 24px;
+}
+
+.secondary-button {
+    padding: 14px 22px;
+    background: rgba(255,255,255,0.08);
+    color: var(--text);
+}
+
+.primary-button:hover,
+.secondary-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 18px 40px rgba(121,180,212,0.2);
+}
+
+.hero-panel {
+    display: grid;
+    gap: 18px;
+    border-left: 1px solid var(--border);
+    padding-left: 24px;
+}
+
+.panel-header {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 16px;
+    border-radius: 999px;
+    background: rgba(121,180,212,0.12);
+    color: var(--accent);
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+.panel-copy h3,
+.plots-card h3,
+.forecast-card h3,
+.metric-card h3 {
+    margin: 0 0 12px;
+    font-size: 1.5rem;
+}
+
+.section-intro {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.stats-panel {
+    display: grid;
+    grid-template-columns: 1fr 0.85fr;
+    gap: 20px;
+    margin-bottom: 24px;
+}
+
+.metric-card {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.card-secondary {
+    background: rgba(12, 22, 44, 0.94);
+}
+
+.stats-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 14px;
+}
+
+.stats-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-radius: 18px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+}
+
+.stats-list strong {
+    font-weight: 700;
+    color: var(--text);
+}
+
+.plot-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+    margin-top: 18px;
+}
+
+.plot-item {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 22px;
+    overflow: hidden;
+    box-shadow: 0 14px 40px rgba(0,0,0,0.14);
+}
+
+.plot-item img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+.plot-item p {
+    margin: 16px;
+    color: var(--muted);
+    font-size: 0.96rem;
+}
+
+.card-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 10px 16px;
+    border-radius: 999px;
+    background: rgba(121,180,212,0.12);
+    color: var(--accent);
+    font-weight: 700;
+}
+
+.table-wrap {
+    overflow-x: auto;
+    margin-top: 18px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 540px;
+}
+
+th,
+td {
+    text-align: left;
+    padding: 16px 18px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+thead {
+    background: rgba(255,255,255,0.05);
+}
+
+tbody tr:hover {
+    background: rgba(255,255,255,0.04);
+}
+
+.site-footer {
+    margin-top: 12px;
+    text-align: center;
+    color: var(--muted);
+    padding: 10px 0;
+    font-size: 0.95rem;
+}
+
+/* ── STATION REPORT ─────────────────────────────────────── */
+
+.kpi-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.kpi-card {
+    background: rgba(18, 30, 56, 0.94);
+    border: 1px solid var(--border);
+    border-radius: 22px;
+    padding: 24px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    backdrop-filter: blur(16px);
+}
+
+.kpi-card.kpi-warn { border-color: rgba(255, 180, 0, 0.35); }
+.kpi-card.kpi-err  { border-color: rgba(214, 39, 40, 0.35); }
+
+.kpi-value {
+    font-size: clamp(1.8rem, 2.6vw, 2.8rem);
+    font-weight: 800;
+    color: var(--accent);
+    line-height: 1;
+}
+.kpi-warn .kpi-value { color: #ffb400; }
+.kpi-err  .kpi-value { color: #ff5a5a; }
+
+.kpi-label {
+    font-size: 0.83rem;
+    color: var(--muted);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.plot-grid-3 {
+    grid-template-columns: repeat(3, 1fr) !important;
+}
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    margin-right: 6px;
+    white-space: nowrap;
+}
+
+.badge-ok   { background: rgba(44, 160, 44, 0.18);  color: #4fc96f; }
+.badge-warn { background: rgba(255, 180, 0, 0.15);  color: #ffb400; }
+.badge-err  { background: rgba(214, 39, 40, 0.15);  color: #ff5a5a; }
+.badge-info { background: rgba(97, 214, 255, 0.12); color: var(--accent); }
+.badge-type { background: rgba(255,255,255,0.07);   color: var(--muted); }
+
+.num-warn { color: #ffb400; font-weight: 700; }
+
+.completeness-bar-wrap {
+    display: inline-block;
+    width: 60px;
+    height: 6px;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.08);
+    overflow: hidden;
+    vertical-align: middle;
+    margin-right: 6px;
+}
+.completeness-bar {
+    display: block;
+    height: 100%;
+    border-radius: 4px;
+    background: linear-gradient(90deg, var(--accent-strong), var(--accent));
+}
+
+.log-table-wrap { max-height: 480px; overflow-y: auto; }
+
+.mono  { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
+.small { font-size: 0.83rem; }
+.muted { color: var(--muted); }
+
+.code-tag {
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    background: rgba(121,180,212,0.08);
+    color: var(--accent);
+    padding: 3px 8px;
+    border-radius: 8px;
+    font-size: 0.88rem;
+}
+
+@media (max-width: 950px) {
+    .hero-card,
+    .stats-panel {
+        grid-template-columns: 1fr;
+    }
+    .kpi-row       { grid-template-columns: repeat(2, 1fr); }
+    .plot-grid-3   { grid-template-columns: 1fr !important; }
+}
+
+@media (max-width: 640px) {
+    .site-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .page-shell {
+        padding: 20px 16px 32px;
+    }
+
+    .site-nav {
+        justify-content: center;
+    }
+}
+
+h1, h2 {
+  letter-spacing: -0.02em;
+}
+
+p {
+  line-height: 1.6;
+}
+footer {
+  margin-top: 2rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+@media (max-width: 960px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .header,
+  .card {
+    padding: 1.4rem;
+  }
+
+  .button-link {
+    width: 100%;
+  }
+}
+
+/* ── Alarm smogowy (baner predykcji NN) ───────────────────────── */
+.alarm-banner {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 18px 22px;
+    border-radius: 14px;
+    margin: 18px 0 24px;
+    border: 1px solid var(--surface-bright);
+    background: var(--surface);
+}
+.alarm-banner .alarm-icon { font-size: 30px; line-height: 1; }
+.alarm-banner .alarm-title { display: block; font-size: 17px; color: var(--text); }
+.alarm-banner .alarm-sub { display: block; font-size: 13px; color: var(--muted); margin-top: 3px; }
+.alarm-banner.alarm-on {
+    border-color: rgba(214, 39, 40, 0.55);
+    background: linear-gradient(90deg, rgba(214,39,40,0.18), rgba(214,39,40,0.04));
+    box-shadow: 0 0 0 1px rgba(214,39,40,0.25) inset;
+}
+.alarm-banner.alarm-on .alarm-title { color: #ff7a7a; }
+.alarm-banner.alarm-off {
+    border-color: rgba(120, 220, 160, 0.35);
+    background: linear-gradient(90deg, rgba(120,220,160,0.12), rgba(120,220,160,0.02));
+}
+.alarm-banner.alarm-off .alarm-title { color: #8ee6b4; }
+
+/* ── Menu nawigacyjne raportu ─────────────────────────────────── */
+.report-menu {
+    position: sticky; top: 0; z-index: 30;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+    padding: 12px 0 14px; margin: 6px 0 20px;
+    background: linear-gradient(var(--bg) 78%, rgba(9,16,30,0));
+    backdrop-filter: blur(4px);
+}
+.report-menu a {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 9px 16px; border-radius: 999px;
+    background: var(--surface); border: 1px solid var(--surface-bright);
+    color: var(--text); text-decoration: none; font-size: 14px; font-weight: 600;
+    transition: border-color .15s, color .15s, background .15s;
+}
+.report-menu a:hover { border-color: var(--accent); color: var(--accent); }
+.report-menu a .menu-emoji { font-size: 16px; }
+.report-menu .menu-spacer { flex: 1 1 auto; }
+.report-menu .menu-btn {
+    padding: 8px 14px; border-radius: 999px; cursor: pointer;
+    background: transparent; border: 1px solid var(--surface-bright);
+    color: var(--muted); font-size: 13px; font-weight: 600; transition: .15s;
+}
+.report-menu .menu-btn:hover { color: var(--text); border-color: var(--accent); }
+
+/* ── Sekcje rozwijane (akordeon główny) ───────────────────────── */
+.msection {
+    background: var(--surface); border: 1px solid var(--surface-bright);
+    border-radius: 16px; margin: 0 0 18px; overflow: hidden; scroll-margin-top: 84px;
+}
+.msection > summary {
+    list-style: none; cursor: pointer; display: flex; align-items: center; gap: 14px;
+    padding: 20px 24px; user-select: none;
+}
+.msection > summary::-webkit-details-marker { display: none; }
+.msection > summary:hover { background: var(--surface-soft); }
+.msection > summary .sec-emoji { font-size: 24px; line-height: 1; }
+.msection > summary .sec-title { display: block; font-size: 18px; font-weight: 700; color: var(--text); }
+.msection > summary .sec-sub { display: block; font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+.msection > summary .sec-chevron {
+    margin-left: auto; color: var(--muted); font-size: 20px; line-height: 1;
+    transition: transform .2s ease;
+}
+.msection[open] > summary .sec-chevron { transform: rotate(90deg); }
+.msection[open] > summary { border-bottom: 1px solid var(--surface-bright); }
+.msection-body { padding: 22px 24px 24px; }
+.msection-body .lead-text { color: var(--muted); margin: 0 0 16px; line-height: 1.6; }
+
+/* ── Szczegóły rozwijane (wykres/opis) ────────────────────────── */
+.detail {
+    border: 1px solid var(--surface-bright); border-radius: 12px;
+    margin: 0 0 12px; background: rgba(255,255,255,0.02);
+}
+.detail > summary {
+    list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px;
+    padding: 13px 16px; font-weight: 600; color: var(--text); font-size: 14.5px; user-select: none;
+}
+.detail > summary::-webkit-details-marker { display: none; }
+.detail > summary:hover { color: var(--accent); }
+.detail > summary .det-chevron { color: var(--muted); font-size: 15px; transition: transform .2s ease; }
+.detail[open] > summary .det-chevron { transform: rotate(90deg); }
+.detail[open] > summary { border-bottom: 1px solid var(--surface-bright); }
+.detail > summary .pill { margin-left: auto; }
+.detail-body { padding: 16px; }
+.detail-desc { color: var(--muted); font-size: 13.5px; line-height: 1.6; margin: 0 0 14px; }
+
+@media (max-width: 720px) {
+    .report-menu { gap: 8px; }
+    .report-menu a { padding: 8px 12px; font-size: 13px; }
+    .msection > summary { padding: 16px 16px; }
+    .msection-body { padding: 16px; }
+}
+
+/* ── System projektowy (skill frontend-design): typografia + sygnatura AQI ────── */
+
+/* Typografia: display dla nagłówków, mono dla danych z czujników (znaczeniowo) */
+h1, h2, h3, h4,
+.sec-title, .brand-mark, .eyebrow, .kpi-value {
+    font-family: var(--font-display);
+    letter-spacing: -0.015em;
+}
+.mono, code, .code-tag, td.mono, .num-warn,
+.alarm-sub, .report-menu .menu-btn, .pill {
+    font-family: var(--font-mono);
+}
+.kpi-value { font-feature-settings: "tnum" 1, "zero" 1; letter-spacing: -0.02em; }
+table { font-variant-numeric: tabular-nums; }
+
+/* Sygnatura: pasek skali jakości powietrza (zielony → fiolet) na górnej krawędzi */
+.aqi-band {
+    height: 4px; width: 100%;
+    background: linear-gradient(90deg,
+        var(--aqi-good) 0%, var(--aqi-mod) 32%, var(--aqi-bad) 55%,
+        var(--aqi-alarm) 78%, var(--aqi-extreme) 100%);
+    box-shadow: 0 0 22px rgba(224,85,107,0.28);
+}
+
+/* Severity = skala AQI (kolor koduje poziom zanieczyszczenia) */
+.badge-ok   { background: rgba(87,192,138,0.16);  color: var(--aqi-good); }
+.badge-warn { background: rgba(232,196,92,0.16);  color: var(--aqi-mod); }
+.badge-err  { background: rgba(224,85,107,0.16);  color: var(--aqi-alarm); }
+.badge-info { background: rgba(121,180,212,0.14); color: var(--accent); }
+.kpi-card.kpi-warn { border-color: rgba(232,196,92,0.38); }
+.kpi-card.kpi-err  { border-color: rgba(224,85,107,0.42); }
+.kpi-warn .kpi-value { color: var(--aqi-mod); }
+.kpi-err  .kpi-value { color: var(--aqi-alarm); }
+.num-warn { color: var(--aqi-mod); }
+.completeness-bar { background: linear-gradient(90deg, var(--aqi-alarm), var(--aqi-mod), var(--aqi-good)); }
+
+/* Alarm: czerwień skali AQI zamiast generycznej */
+.alarm-banner.alarm-on {
+    border-color: rgba(224,85,107,0.55);
+    background: linear-gradient(90deg, rgba(224,85,107,0.18), rgba(224,85,107,0.03));
+    box-shadow: 0 0 0 1px rgba(224,85,107,0.22) inset;
+}
+.alarm-banner.alarm-on .alarm-title { color: var(--aqi-alarm); }
+.alarm-banner.alarm-off {
+    border-color: rgba(87,192,138,0.34);
+    background: linear-gradient(90deg, rgba(87,192,138,0.12), transparent);
+}
+.alarm-banner.alarm-off .alarm-title { color: var(--aqi-good); }
+
+/* Nagłówki sekcji: lekko zwiększona obecność (restraint w reszcie) */
+.msection > summary .sec-title { font-size: 19px; }
+.section-intro h2 { letter-spacing: -0.02em; }
+
+:root { color-scheme: dark; }
+.site-nav a.active { }
+.snapshot-note { font-size: 0.85em; opacity: 0.75; }
+</style>
+</head>
+<body>
+<div class="aqi-band" aria-hidden="true"></div>
+    <div class="page-shell">
+        <header class="site-header">
+            <div class="brand-panel">
+                <span class="brand-mark">AQ</span>
+                <div>
+                    <h1>Jakość powietrza — WFiIS AGH</h1>
+                    <p>Stacja GAS, Kraków: detekcja awarii, analiza danych i predykcja epizodów smogowych PM10.</p>
+                </div>
+            </div>
+            <nav class="site-nav">
+                <a href="#start" data-view="start" >Start</a>
+                <a href="#analizy" data-view="analizy">Analizy</a>
+                <a href="#awarie" data-view="awarie">Awarie stacji</a>
+            </nav>
+        </header>
+<main>
+<section class="view" id="view-start">
+            
+<section class="hero-card">
+    <div class="hero-copy">
+        <span class="eyebrow">Stacja WFiIS AGH (GAS)</span>
+        <h2>Analiza jakości powietrza i braków danych ze stacji pomiarowej</h2>
+        <p>Dane godzinowe i minutowe (NO, NO₂, NOₓ, SO₂, O₃, CO, PM10): kompletność pomiarów, kody błędów czujników, korelacje i sezonowość.</p>
+
+        <div class="hero-actions">
+            <a class="primary-button" href="#analizy" data-view="analizy">Wyniki analiz</a>
+            <a class="primary-button ghost" href="#awarie" data-view="awarie">Awarie stacji</a>
+        </div>
+    </div>
+
+    <aside class="hero-panel">
+        <div class="panel-header">
+            <span class="chip">Braki danych</span>
+            <span class="chip">Kody błędów</span>
+            <span class="chip">Korelacje</span>
+            <span class="chip">Sezonowość</span>
+        </div>
+        <div class="panel-copy">
+            <h3>Stacja WFiIS AGH, Kraków</h3>
+            <p>Analiza kompletności i jakości pomiarów dla wieloletniej serii danych ze stacji monitoringu powietrza.</p>
+        </div>
+    </aside>
+</section>
+
+        </section>
+<section class="view" id="view-analizy" hidden>
+            
+
+<section class="section-intro">
+    <div>
+        <span class="eyebrow">WFiIS AGH · Kraków</span>
+        <h2>Wyniki analiz</h2>
+    </div>
+    <p>Predykcja epizodów smogowych, alerty, zależności cech i jakość danych — dane HM+MM 2018–2026,
+       liczone wprost z plików WFiIS_AQ. Awarie i braki stacji na osobnej stronie
+       <a href="#awarie" data-view="awarie">Awarie stacji</a>. Rozwiń sekcję w menu, by zobaczyć szczegóły i wykresy.</p>
+</section>
+
+<!-- ── ALARM SMOGOWY (zawsze widoczny) ───────────────────── -->
+
+<section class="alarm-banner alarm-off">
+    
+        <span class="alarm-icon">✅</span>
+        <div>
+            <strong class="alarm-title">Brak alarmu smogowego</strong>
+            <span class="alarm-sub">Ryzyko epizodu w najbliższym czasie niskie.
+                Prognoza ~10.7 h smogu w 7 dni.</span>
+        </div>
+    
+</section>
+
+
+<!-- ── MENU NAWIGACYJNE ──────────────────────────────────── -->
+<nav class="report-menu" aria-label="Sekcje analiz">
+    <a href="#alerty"><span class="menu-emoji">🚨</span> Alerty smogowe</a>
+    <a href="#predykcja"><span class="menu-emoji">🔮</span> Predykcja</a>
+    <a href="#dane"><span class="menu-emoji">📊</span> Dane i analiza</a>
+    <a href="#preprocessing"><span class="menu-emoji">🧪</span> Jakość danych</a>
+    <span class="menu-spacer"></span>
+    <button type="button" class="menu-btn" data-toggle-all="open">Rozwiń wszystko</button>
+    <button type="button" class="menu-btn" data-toggle-all="close">Zwiń wszystko</button>
+</nav>
+
+<!-- ═══ SEKCJA 1: ALERTY SMOGOWE ═══════════════════════════ -->
+<details class="msection" id="alerty" open>
+    <summary>
+        <span class="sec-emoji">🚨</span>
+        <span><span class="sec-title">Alerty smogowe</span>
+            <span class="sec-sub">
+                NN · stan na 2026-05-20 11:00:00
+            </span></span>
+        <span class="sec-chevron">›</span>
+    </summary>
+    <div class="msection-body">
+        
+        <p class="lead-text">
+            Bieżące PM10: <strong>24.3 µg/m³</strong>
+            (poziom: brak).
+            
+                <span class="badge badge-ok">brak trwającego epizodu</span>
+            
+            
+                · przewidywane godziny smogu (7 dni): <strong>10.7 h</strong>
+            
+        </p>
+        <div class="kpi-row">
+            
+            <div class="kpi-card ">
+                <span class="kpi-value">16.0%</span>
+                <span class="kpi-label">Krótkoterminowy (6 h)</span>
+            </div>
+            
+            <div class="kpi-card kpi-warn">
+                <span class="kpi-value">43.6%</span>
+                <span class="kpi-label">Dobowy (24 h)</span>
+            </div>
+            
+            <div class="kpi-card kpi-err">
+                <span class="kpi-value">66.2%</span>
+                <span class="kpi-label">Tygodniowy (7 dni) · ⚠ alarm</span>
+            </div>
+            
+        </div>
+        <p class="detail-desc" style="margin-top:14px">
+            Ryzyko = prawdopodobieństwo przekroczenia progu PM10 w danym horyzoncie (sieć neuronowa
+            CNN+LSTM). Alarm zapala się dla horyzontów 6/24 h; tygodniowy traktowany jako prognoza.
+        </p>
+        
+
+        
+        <details class="detail">
+            <summary><span class="det-chevron">›</span> Historia epizodów PM10
+                <span class="pill">458 epizodów · próg 50.0 µg/m³</span></summary>
+            <div class="detail-body">
+                <p class="detail-desc">Wykryte epizody (ciągi przekroczeń progu z mostkowaniem krótkich spadków).
+                    Najdłuższy: 141 h, maks. PM10: 237.6 µg/m³.</p>
+                <div class="kpi-row">
+                    <div class="kpi-card"><span class="kpi-value">458</span><span class="kpi-label">Epizodów łącznie</span></div>
+                    <div class="kpi-card"><span class="kpi-value">13.9 h</span><span class="kpi-label">Średni czas trwania</span></div>
+                    <div class="kpi-card kpi-warn"><span class="kpi-value">141 h</span><span class="kpi-label">Najdłuższy epizod</span></div>
+                    <div class="kpi-card kpi-err"><span class="kpi-value">237.6</span><span class="kpi-label">Maks. PM10 [µg/m³]</span></div>
+                </div>
+                
+                <div class="plot-item" style="margin-top:18px">
+                    <img src="plots/episodes_timeline.png" alt="Oś czasu epizodów PM10" loading="lazy">
+                    <p>Średnia dobowa PM10 z zaznaczonymi epizodami i progami alarmowymi</p>
+                </div>
+                
+                <div class="table-wrap" style="margin-top:18px">
+                    <table>
+                        <thead><tr><th>Początek</th><th>Koniec</th><th>Czas [h]</th><th>Szczyt [µg/m³]</th><th>Poziom</th></tr></thead>
+                        <tbody>
+                            
+                            <tr>
+                                <td class="mono">2026-05-04 21:00:00</td><td class="mono">2026-05-04 23:00:00</td>
+                                <td>3</td><td class="num-warn">61.4</td>
+                                <td><span class="badge badge-info">norma_dobowa</span></td>
+                            </tr>
+                            
+                            <tr>
+                                <td class="mono">2026-04-18 21:00:00</td><td class="mono">2026-04-19 05:00:00</td>
+                                <td>9</td><td class="num-warn">59.1</td>
+                                <td><span class="badge badge-info">norma_dobowa</span></td>
+                            </tr>
+                            
+                            <tr>
+                                <td class="mono">2026-04-17 06:00:00</td><td class="mono">2026-04-17 10:00:00</td>
+                                <td>5</td><td class="num-warn">71.1</td>
+                                <td><span class="badge badge-info">norma_dobowa</span></td>
+                            </tr>
+                            
+                            <tr>
+                                <td class="mono">2026-04-15 07:00:00</td><td class="mono">2026-04-16 22:00:00</td>
+                                <td>40</td><td class="num-warn">84.8</td>
+                                <td><span class="badge badge-info">norma_dobowa</span></td>
+                            </tr>
+                            
+                            <tr>
+                                <td class="mono">2026-04-11 22:00:00</td><td class="mono">2026-04-12 08:00:00</td>
+                                <td>11</td><td class="num-warn">68.4</td>
+                                <td><span class="badge badge-info">norma_dobowa</span></td>
+                            </tr>
+                            
+                            <tr>
+                                <td class="mono">2026-04-10 23:00:00</td><td class="mono">2026-04-11 10:00:00</td>
+                                <td>12</td><td class="num-warn">59.9</td>
+                                <td><span class="badge badge-info">norma_dobowa</span></td>
+                            </tr>
+                            
+                            <tr>
+                                <td class="mono">2026-04-10 03:00:00</td><td class="mono">2026-04-10 09:00:00</td>
+                                <td>7</td><td class="num-warn">64.9</td>
+                                <td><span class="badge badge-info">norma_dobowa</span></td>
+                            </tr>
+                            
+                            <tr>
+                                <td class="mono">2026-04-04 03:00:00</td><td class="mono">2026-04-04 07:00:00</td>
+                                <td>5</td><td class="num-warn">58.4</td>
+                                <td><span class="badge badge-info">norma_dobowa</span></td>
+                            </tr>
+                            
+                            <tr>
+                                <td class="mono">2026-04-03 05:00:00</td><td class="mono">2026-04-03 09:00:00</td>
+                                <td>5</td><td class="num-warn">57.7</td>
+                                <td><span class="badge badge-info">norma_dobowa</span></td>
+                            </tr>
+                            
+                            <tr>
+                                <td class="mono">2026-04-02 07:00:00</td><td class="mono">2026-04-02 09:00:00</td>
+                                <td>3</td><td class="num-warn">55.9</td>
+                                <td><span class="badge badge-info">norma_dobowa</span></td>
+                            </tr>
+                            
+                            <tr>
+                                <td class="mono">2026-03-29 09:00:00</td><td class="mono">2026-03-29 13:00:00</td>
+                                <td>5</td><td class="num-warn">58.7</td>
+                                <td><span class="badge badge-info">norma_dobowa</span></td>
+                            </tr>
+                            
+                            <tr>
+                                <td class="mono">2026-03-28 15:00:00</td><td class="mono">2026-03-29 02:00:00</td>
+                                <td>12</td><td class="num-warn">68.2</td>
+                                <td><span class="badge badge-info">norma_dobowa</span></td>
+                            </tr>
+                            
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </details>
+        
+
+        
+        <details class="detail">
+            <summary><span class="det-chevron">›</span> Sezonowość epizodów (skala roku)
+                <span class="pill">zima: 48.5% godzin smogu</span></summary>
+            <div class="detail-body">
+                
+                <p class="detail-desc">
+                    Szczyt intensywności: <strong>Mar</strong>. Sezon grzewczy (X–III) =
+                    <strong>87.5%</strong> godzin smogu, miesiące zimowe (XII–II) =
+                    <strong>48.5%</strong> przy 33.6% liczby epizodów
+                    (epizody zimowe są dłuższe).
+                </p>
+                
+                
+                <div class="plot-item" style="margin-bottom:18px">
+                    <img src="plots/episodes_seasonality.png" alt="Sezonowość epizodów" loading="lazy">
+                    <p>Liczba epizodów wg miesiąca (zima podświetlona) oraz godziny smogu rok × miesiąc</p>
+                </div>
+                
+                <p class="detail-desc" style="margin-top:2px">Uwaga: surowa <strong>liczba epizodów</strong> zależy od
+                    pokrycia czujnika (miesiąc z niższym pokryciem wykrywa mniej epizodów). Kolumna
+                    <strong>epiz./1000 h</strong> normalizuje ją względem godzin z ważnym pomiarem — to miara odporna na uptime.</p>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Miesiąc</th><th>Liczba epizodów</th><th>Epiz./1000 h</th><th>Pokrycie</th><th>Godziny smogu</th><th>Śr. szczyt [µg/m³]</th></tr></thead>
+                        <tbody>
+                            
+                            <tr>
+                                <td><strong>Sty</strong></td><td>45</td>
+                                <td class="mono">14.96</td>
+                                <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:50.6%"></span></span>50.6%</td>
+                                <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:81%"></span></span>1135</td>
+                                <td class="mono">96.0</td>
+                            </tr>
+                            
+                            <tr>
+                                <td><strong>Lut</strong></td><td>75</td>
+                                <td class="mono">19.83</td>
+                                <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:69.7%"></span></span>69.7%</td>
+                                <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:88%"></span></span>1233</td>
+                                <td class="mono">84.9</td>
+                            </tr>
+                            
+                            <tr>
+                                <td><strong>Mar</strong></td><td>105</td>
+                                <td class="mono">22.74</td>
+                                <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:77.6%"></span></span>77.6%</td>
+                                <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:97%"></span></span>1359</td>
+                                <td class="mono">87.8</td>
+                            </tr>
+                            
+                            <tr>
+                                <td><strong>Kwi</strong></td><td>55</td>
+                                <td class="mono">14.78</td>
+                                <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:64.6%"></span></span>64.6%</td>
+                                <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:34%"></span></span>483</td>
+                                <td class="mono">78.1</td>
+                            </tr>
+                            
+                            <tr>
+                                <td><strong>Maj</strong></td><td>11</td>
+                                <td class="mono">5.11</td>
+                                <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:37.9%"></span></span>37.9%</td>
+                                <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:4%"></span></span>62</td>
+                                <td class="mono">57.1</td>
+                            </tr>
+                            
+                            <tr>
+                                <td><strong>Cze</strong></td><td>12</td>
+                                <td class="mono">5.12</td>
+                                <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:46.5%"></span></span>46.5%</td>
+                                <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:5%"></span></span>71</td>
+                                <td class="mono">65.6</td>
+                            </tr>
+                            
+                            <tr>
+                                <td><strong>Lip</strong></td><td>3</td>
+                                <td class="mono">0.98</td>
+                                <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:58.7%"></span></span>58.7%</td>
+                                <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:1%"></span></span>16</td>
+                                <td class="mono">67.5</td>
+                            </tr>
+                            
+                            <tr>
+                                <td><strong>Sie</strong></td><td>10</td>
+                                <td class="mono">3.03</td>
+                                <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:63.4%"></span></span>63.4%</td>
+                                <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:3%"></span></span>43</td>
+                                <td class="mono">68.1</td>
+                            </tr>
+                            
+                            <tr>
+                                <td><strong>Wrz</strong></td><td>16</td>
+                                <td class="mono">6.28</td>
+                                <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:50.5%"></span></span>50.5%</td>
+                                <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:9%"></span></span>122</td>
+                                <td class="mono">72.9</td>
+                            </tr>
+                            
+                            <tr>
+                                <td><strong>Paź</strong></td><td>36</td>
+                                <td class="mono">10.35</td>
+                                <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:64.1%"></span></span>64.1%</td>
+                                <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:38%"></span></span>527</td>
+                                <td class="mono">84.6</td>
+                            </tr>
+                            
+                            <tr>
+                                <td><strong>Lis</strong></td><td>56</td>
+                                <td class="mono">17.21</td>
+                                <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:56.5%"></span></span>56.5%</td>
+                                <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:43%"></span></span>602</td>
+                                <td class="mono">75.5</td>
+                            </tr>
+                            
+                            <tr>
+                                <td><strong>Gru</strong></td><td>34</td>
+                                <td class="mono">14.14</td>
+                                <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:40.4%"></span></span>40.4%</td>
+                                <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:52%"></span></span>730</td>
+                                <td class="mono">95.7</td>
+                            </tr>
+                            
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </details>
+        
+    </div>
+</details>
+
+<!-- ═══ SEKCJA 2: PREDYKCJA ════════════════════════════════ -->
+<details class="msection" id="predykcja">
+    <summary>
+        <span class="sec-emoji">🔮</span>
+        <span><span class="sec-title">Predykcja</span>
+            <span class="sec-sub">modele onset / czas trwania · sieć neuronowa · zależności cech</span></span>
+        <span class="sec-chevron">›</span>
+    </summary>
+    <div class="msection-body">
+        
+        <details class="detail" open>
+            <summary><span class="det-chevron">›</span> Jakość modeli — gradient boosting
+                <span class="pill">+ meteo</span></summary>
+            <div class="detail-body">
+                <p class="detail-desc">Onset = klasyfikacja przekroczenia progu w horyzoncie; czas trwania = regresja.
+                    Metryki na zbiorze testowym (chronologicznym), porównane z baseline „persistence".</p>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Zadanie (onset)</th><th>F1</th><th>ROC-AUC</th><th>PR-AUC</th><th>Recall</th><th>Baseline F1</th></tr></thead>
+                        <tbody>
+                            
+                            <tr><td>PM10≥50 w 6 h</td><td><strong>0.827</strong></td>
+                                <td>0.957</td><td>0.905</td><td>0.826</td><td class="muted">0.736</td></tr>
+                            
+                            <tr><td>PM10≥50 w 24 h</td><td><strong>0.774</strong></td>
+                                <td>0.888</td><td>0.872</td><td>0.924</td><td class="muted">0.583</td></tr>
+                            
+                            <tr><td>PM10≥50 w 168 h</td><td><strong>0.921</strong></td>
+                                <td>0.852</td><td>0.93</td><td>1.0</td><td class="muted">0.381</td></tr>
+                            
+                            <tr><td>PM10≥100 w 6 h</td><td><strong>0.64</strong></td>
+                                <td>0.958</td><td>0.649</td><td>0.6</td><td class="muted">0.756</td></tr>
+                            
+                            <tr><td>PM10≥100 w 24 h</td><td><strong>0.247</strong></td>
+                                <td>0.912</td><td>0.454</td><td>0.949</td><td class="muted">0.504</td></tr>
+                            
+                            <tr><td>PM10≥100 w 168 h</td><td><strong>0.574</strong></td>
+                                <td>0.871</td><td>0.54</td><td>0.94</td><td class="muted">0.176</td></tr>
+                            
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="table-wrap" style="margin-top:16px">
+                    <table>
+                        <thead><tr><th>Czas trwania epizodu</th><th>MAE [h]</th><th>R²</th><th>Baseline MAE [h]</th></tr></thead>
+                        <tbody>
+                            
+                            <tr><td>próg PM10≥50</td><td><strong>18.258</strong></td><td>0.594</td><td class="muted">27.016</td></tr>
+                            
+                            <tr><td>próg PM10≥100</td><td><strong>59.113</strong></td><td>-3.225</td><td class="muted">61.98</td></tr>
+                            
+                        </tbody>
+                    </table>
+                </div>
+                
+                
+                <div class="plot-grid plot-grid-3" style="margin-top:18px">
+                    <div class="plot-item"><img src="plots/episode_onset_f1.png" alt="F1 onset" loading="lazy"><p>F1 klasyfikacji onset epizodu</p></div>
+                    <div class="plot-item"><img src="plots/episode_roc_pr_50_h24.png" alt="ROC/PR" loading="lazy"><p>Krzywe ROC i PR (PM10≥50, 24 h)</p></div>
+                    <div class="plot-item"><img src="plots/episode_cm_50_h24.png" alt="Macierz pomyłek" loading="lazy"><p>Macierz pomyłek (PM10≥50, 24 h)</p></div>
+                </div>
+                
+            </div>
+        </details>
+        
+
+        
+        <details class="detail">
+            <summary><span class="det-chevron">›</span> Sieć neuronowa (CNN+LSTM)
+                <span class="pill">model alarmów</span></summary>
+            <div class="detail-body">
+                <p class="detail-desc">Wielozadaniowa sieć z okna 72 h: onset 6/24/168 h + przewidywane godziny smogu.
+                    To ona zasila alarmy. Na danych z dryfem rozkładu jest konkurencyjna z gradient boostingiem.</p>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Horyzont</th><th>F1</th><th>ROC-AUC</th><th>PR-AUC</th><th>Recall</th></tr></thead>
+                        <tbody>
+                            
+                            <tr><td>PM10≥50 w 6 h</td><td><strong>0.807</strong></td><td>0.946</td><td>0.897</td><td>0.825</td></tr>
+                            
+                            <tr><td>PM10≥50 w 24 h</td><td><strong>0.783</strong></td><td>0.874</td><td>0.881</td><td>0.865</td></tr>
+                            
+                            <tr><td>PM10≥50 w 168 h</td><td><strong>0.943</strong></td><td>0.872</td><td>0.978</td><td>0.989</td></tr>
+                            
+                            <tr><td>godziny smogu (7 dni)</td><td colspan="4">MAE 20.665 h · R² 0.253</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="plot-item" style="margin-top:18px"><img src="plots/episode_net_roc_pr_h24.png" alt="ROC/PR sieć NN" loading="lazy"><p>Sieć NN — krzywe ROC i PR (onset 24 h)</p></div>
+                
+            </div>
+        </details>
+        
+
+        
+        <details class="detail">
+            <summary><span class="det-chevron">›</span> Zależności między cechami
+                <span class="pill">analiza wpływu</span></summary>
+            <div class="detail-body">
+                <p class="detail-desc">Współzależności zanieczyszczeń i meteo: informacja wzajemna, korelacja cząstkowa
+                    (powiązania bezpośrednie), korelacja z wyprzedzeniem oraz graf zależności. Najsilniejsze dla PM10:
+                    CO i prędkość wiatru.</p>
+                <div class="plot-grid plot-grid-2">
+                    
+                    <div class="plot-item"><img src="plots/influence_mi_matrix.png" alt="Informacja wzajemna między cechami" loading="lazy"><p>Informacja wzajemna między cechami</p></div>
+                    
+                    <div class="plot-item"><img src="plots/influence_partial_corr.png" alt="Korelacja cząstkowa (zależności bezpośrednie)" loading="lazy"><p>Korelacja cząstkowa (zależności bezpośrednie)</p></div>
+                    
+                    <div class="plot-item"><img src="plots/influence_leadlag_corr.png" alt="Korelacja z wyprzedzeniem (a → b)" loading="lazy"><p>Korelacja z wyprzedzeniem (a → b)</p></div>
+                    
+                    <div class="plot-item"><img src="plots/influence_graph.png" alt="Graf zależności (|Spearman| ≥ 0,3)" loading="lazy"><p>Graf zależności (|Spearman| ≥ 0,3)</p></div>
+                    
+                </div>
+            </div>
+        </details>
+        
+
+        
+    </div>
+</details>
+
+<!-- ═══ SEKCJA 3: DANE I ANALIZA ═══════════════════════════ -->
+<details class="msection" id="dane">
+    <summary>
+        <span class="sec-emoji">📊</span>
+        <span><span class="sec-title">Dane i analiza</span>
+            <span class="sec-sub">sensory · korelacje · sezonowość · meteo</span></span>
+        <span class="sec-chevron">›</span>
+    </summary>
+    <div class="msection-body">
+        
+        <details class="detail">
+            <summary><span class="det-chevron">›</span> Pokrycie i statystyki sensorów
+                <span class="pill">2018-10-23 – 2026-05-20</span></summary>
+            <div class="detail-body">
+                <p class="detail-desc">Dane godzinowe (HM+MM, 62503 wierszy). Tylko pomiary z prawidłowym kodem statusu.</p>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Sensor</th><th>Ważne pomiary</th><th>Pokrycie</th><th>Średnia</th><th>Mediana</th><th>P95</th><th>Odch. std</th></tr></thead>
+                        <tbody>
+                            
+                            <tr>
+                                <td><strong>NO</strong></td><td>57019</td>
+                                <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:91.2%"></span></span>91.2%</td>
+                                <td class="mono">0.0015</td><td class="mono">0.0004</td>
+                                <td class="mono">0.004</td><td class="mono">0.0063</td>
+                            </tr>
+                            
+                            <tr>
+                                <td><strong>NO2</strong></td><td>55931</td>
+                                <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:89.5%"></span></span>89.5%</td>
+                                <td class="mono">0.0039</td><td class="mono">0.0018</td>
+                                <td class="mono">0.0154</td><td class="mono">0.0062</td>
+                            </tr>
+                            
+                            <tr>
+                                <td><strong>NOx</strong></td><td>57392</td>
+                                <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:91.8%"></span></span>91.8%</td>
+                                <td class="mono">0.0053</td><td class="mono">0.0022</td>
+                                <td class="mono">0.0195</td><td class="mono">0.011</td>
+                            </tr>
+                            
+                            <tr>
+                                <td><strong>SO2</strong></td><td>10270</td>
+                                <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:16.4%"></span></span>16.4%</td>
+                                <td class="mono">5.1082</td><td class="mono">4.24</td>
+                                <td class="mono">11.781</td><td class="mono">3.3165</td>
+                            </tr>
+                            
+                            <tr>
+                                <td><strong>O3</strong></td><td>43399</td>
+                                <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:69.4%"></span></span>69.4%</td>
+                                <td class="mono">80.359</td><td class="mono">82.0</td>
+                                <td class="mono">160.1</td><td class="mono">48.0176</td>
+                            </tr>
+                            
+                            <tr>
+                                <td><strong>CO</strong></td><td>62503</td>
+                                <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:100.0%"></span></span>100.0%</td>
+                                <td class="mono">0.271</td><td class="mono">0.202</td>
+                                <td class="mono">0.667</td><td class="mono">0.1943</td>
+                            </tr>
+                            
+                            <tr>
+                                <td><strong>PM10</strong></td><td>37664</td>
+                                <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:60.3%"></span></span>60.3%</td>
+                                <td class="mono">33.8578</td><td class="mono">27.7</td>
+                                <td class="mono">76.9185</td><td class="mono">22.6068</td>
+                            </tr>
+                            
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </details>
+        
+
+        
+        <details class="detail">
+            <summary><span class="det-chevron">›</span> Korelacje, trendy i sezonowość sensorów <span class="pill">3 wykresy</span></summary>
+            <div class="detail-body">
+                <p class="detail-desc">Zależności między zanieczyszczeniami, tendencje długoterminowe oraz rozkład miesięczny stężeń.</p>
+                <div class="plot-grid plot-grid-3">
+                    <div class="plot-item"><img src="plots/wfiis_correlation.png" alt="Korelacje sensorów" loading="lazy"><p>Macierz korelacji Pearsona między sensorami</p></div>
+                    <div class="plot-item"><img src="plots/wfiis_trends.png" alt="Tendencje czasowe" loading="lazy"><p>Tendencje długoterminowe – agregacja dzienna + śr. 30 dni</p></div>
+                    <div class="plot-item"><img src="plots/wfiis_seasonal.png" alt="Sezonowość miesięczna" loading="lazy"><p>Sezonowość miesięczna – rozkład per miesiąc (wszystkie lata)</p></div>
+                </div>
+            </div>
+        </details>
+        
+
+        <details class="detail">
+            <summary><span class="det-chevron">›</span> Dane meteorologiczne
+                <span class="pill">2018-01-01 – 2026-09-30</span></summary>
+            <div class="detail-body">
+                
+                <p class="detail-desc">Parametry meteo ze stacji meteo2 WFiIS AGH (76680 godzin), używane jako cechy modeli.</p>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Parametr</th><th>Średnia</th><th>Min</th><th>Maks</th><th>Pokrycie</th></tr></thead>
+                        <tbody>
+                            
+                            <tr><td><strong>Temperatura [°C]</strong></td><td class="mono">10.2</td><td class="mono">-18.1</td><td class="mono">37.2</td><td>100.0%</td></tr>
+                            
+                            <tr><td><strong>Ciśnienie [hPa]</strong></td><td class="mono">988.0</td><td class="mono">956.0</td><td class="mono">1016.2</td><td>100.0%</td></tr>
+                            
+                            <tr><td><strong>Wilgotność [%]</strong></td><td class="mono">76.6</td><td class="mono">9.0</td><td class="mono">100.0</td><td>100.0%</td></tr>
+                            
+                            <tr><td><strong>Wiatr [m/s]</strong></td><td class="mono">3.1</td><td class="mono">0.0</td><td class="mono">20.0</td><td>100.0%</td></tr>
+                            
+                            <tr><td><strong>Kierunek wiatru [°]</strong></td><td class="mono">153.2</td><td class="mono">0.0</td><td class="mono">360.0</td><td>100.0%</td></tr>
+                            
+                            <tr><td><strong>Opad</strong></td><td class="mono">0.4</td><td class="mono">0.0</td><td class="mono">35.6</td><td>100.0%</td></tr>
+                            
+                        </tbody>
+                    </table>
+                </div>
+                
+            </div>
+        </details>
+    </div>
+</details>
+
+<!-- ═══ SEKCJA 4: JAKOŚĆ DANYCH I PREPROCESSING ════════════ -->
+<details class="msection" id="preprocessing">
+    <summary>
+        <span class="sec-emoji">🧪</span>
+        <span><span class="sec-title">Jakość danych i preprocessing</span>
+            <span class="sec-sub">korekty czyszczenia · porównanie STEP-0/1/2</span></span>
+        <span class="sec-chevron">›</span>
+    </summary>
+    <div class="msection-body">
+        <p class="lead-text">Wpływ korekt jakości danych na wyniki modeli. Kluczowa poprawka — usunięcie sentinela
+            <strong>985 µg/m³</strong> (kod overflow analizatora przeciekający przez status „valid”) — zmniejszyła RMSE
+            prognoz sześciokrotnie i usunęła ponad połowę fałszywych godzin „alarmowych”.</p>
+
+        
+        <p class="detail-desc">Brak wykresów porównawczych — wygeneruj je do <code class="code-tag">plots/porownanie_steps_*.png</code>.</p>
+        
+
+        <details class="detail" open>
+            <summary><span class="det-chevron">›</span> Wprowadzone korekty <span class="pill">przed → po</span></summary>
+            <div class="detail-body">
+                <p class="detail-desc">Polityka statusów ustalona empirycznie (profilowanie wartości per czujnik), nie z dokumentacji.</p>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Korekta</th><th>Przed</th><th>Po</th><th>Efekt</th></tr></thead>
+                        <tbody>
+                            
+                            <tr>
+                                <td><strong>Sentinel 985 µg/m³ (kod overflow analizatora)</strong></td>
+                                <td class="muted">max 985 · 267 godz. „alarmu” ≥150</td>
+                                <td>max 646 · 115 godz. ≥150</td>
+                                <td class="detail-desc" style="margin:0">Przeciekał przez status 40/01 (147 godz. w combined). Fizyczny cap 900 µg/m³. RMSE prognoz spadło ×6 (42→7), R² GBM +1h 0.58→0.90.</td>
+                            </tr>
+                            
+                            <tr>
+                                <td><strong>SO₂ status „22” — saturacja czujnika</strong></td>
+                                <td class="muted">~29,5 tys. „valid” (65% to artefakt 386 µg/m³)</td>
+                                <td>10,3 tys. realnych (mediana ~4 µg/m³)</td>
+                                <td class="detail-desc" style="margin:0">Płaski klaster 340–513 µg/m³ (std ~11) = awaria, nie realny SO₂. Usunięty; valid = {02}.</td>
+                            </tr>
+                            
+                            <tr>
+                                <td><strong>PM10 — rozszerzone statusy „wątpliwe”</strong></td>
+                                <td class="muted">tylko status 40</td>
+                                <td>40, 21, 04, 01 (HM)</td>
+                                <td class="detail-desc" style="margin:0">Statusy 21/04/01 niosą realny, zmienny sygnał (uniq/n 0.66–0.93). Odrzucone: 00 (stuck), 80/82 (awaria), 99 (brak).</td>
+                            </tr>
+                            
+                            <tr>
+                                <td><strong>Modele okienne (LSTM / sieć alertów) — cechy gęste</strong></td>
+                                <td class="muted">~2,7 tys. okien (R² 0.11)</td>
+                                <td>~31,5 tys. okien (R² 0.70)</td>
+                                <td class="detail-desc" style="margin:0">Rzadkie czujniki głodziły kompletne okna 72 h. LSTM/episode_net na PM10+meteo+czas; GBM bierze wszystkie czujniki natywnie (NaN).</td>
+                            </tr>
+                            
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </details>
+    </div>
+</details>
+
+
+        </section>
+<section class="view" id="view-awarie" hidden>
+            
+
+<section class="section-intro">
+    <div>
+        <span class="eyebrow">WFiIS AGH · Kraków · stacja GAS</span>
+        <h2>Awarie stacji mierników</h2>
+    </div>
+    <p>Detekcja awarii i braków pomiarowych liczona wprost z plików WFiIS_AQ (HM+MM, 2018-10-23 – 2026-05-20):
+       kompletność, brakujące godziny, awarie czujnika PM10, log zdarzeń i legenda kodów Status;Error.
+       Rozwiń sekcję w menu, by zobaczyć szczegóły.</p>
+</section>
+
+<!-- ── KPI (zawsze widoczne) ──────────────────────────────── -->
+<div class="kpi-row">
+    <div class="kpi-card"><span class="kpi-value">2767</span><span class="kpi-label">Dni w bazie</span></div>
+    <div class="kpi-card"><span class="kpi-value">94.14%</span><span class="kpi-label">Śr. kompletność</span></div>
+    <div class="kpi-card kpi-warn"><span class="kpi-value">3893</span><span class="kpi-label">Brakujące godziny</span></div>
+    <div class="kpi-card kpi-err"><span class="kpi-value">24839</span><span class="kpi-label">Awarie PM10</span></div>
+</div>
+
+<!-- ── KOMPLETNOŚĆ WG ŹRÓDŁA (HM vs MM) ─────────────────── -->
+
+<details class="msection" id="zrodla" open>
+    <summary>
+        <span class="sec-emoji">🧭</span>
+        <span><span class="sec-title">Kompletność wg źródła pomiaru</span>
+            <span class="sec-sub">osobno: dane godzinowe (HM), minutowe (MM) i seria łączona</span></span>
+        <span class="sec-chevron">›</span>
+    </summary>
+    <div class="msection-body">
+        <p class="detail-desc">Braki liczone <strong>osobno dla każdego toru</strong> oraz dla serii
+            połączonej (MM uzupełnia luki HM). „Pokrycie PM10" = udział godzin z ważnym pomiarem PM10.</p>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Źródło</th><th>Kompletność</th><th>Pokrycie PM10</th><th>Godziny obecne</th><th>Braki [h]</th></tr></thead>
+                <tbody>
+                    <tr><td><strong>HM (godzinowe)</strong></td>
+                        <td>93.1%</td>
+                        <td class="mono">46.11%</td>
+                        <td>61813</td>
+                        <td class="num-warn">4583</td></tr>
+                    <tr><td><strong>MM (minutowe)</strong></td>
+                        <td>93.15%</td>
+                        <td class="mono">56.39%</td>
+                        <td>61848</td>
+                        <td class="num-warn">4548</td></tr>
+                    <tr><td><strong>Łącznie (HM+MM)</strong></td>
+                        <td>94.14%</td>
+                        <td class="mono">56.73%</td>
+                        <td>62503</td>
+                        <td class="num-warn">3893</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</details>
+
+
+<!-- ── MENU NAWIGACYJNE ──────────────────────────────────── -->
+<nav class="report-menu" aria-label="Sekcje awarii">
+    <a href="#zrodla"><span class="menu-emoji">🧭</span> Źródła HM/MM</a>
+    <a href="#dni"><span class="menu-emoji">📉</span> Dni z brakami</a>
+    <a href="#zdarzenia"><span class="menu-emoji">📋</span> Podsumowanie zdarzeń</a>
+    <a href="#log"><span class="menu-emoji">🧾</span> Log zdarzeń</a>
+    <a href="#kody"><span class="menu-emoji">🔑</span> Kody Status;Error</a>
+    <span class="menu-spacer"></span>
+    <button type="button" class="menu-btn" data-toggle-all="open">Rozwiń wszystko</button>
+    <button type="button" class="menu-btn" data-toggle-all="close">Zwiń wszystko</button>
+</nav>
+
+<!-- ═══ Dni z brakami ══════════════════════════════════════ -->
+<details class="msection" id="dni" open>
+    <summary>
+        <span class="sec-emoji">📉</span>
+        <span><span class="sec-title">Dni z brakami pomiarowymi</span>
+            <span class="sec-sub">TOP 50 dni o najniższej kompletności</span></span>
+        <span class="sec-chevron">›</span>
+    </summary>
+    <div class="msection-body">
+        <p class="detail-desc">Liczba brakujących godzin, awarie PM10, najdłuższa ciągła przerwa i status stacji
+            (OK / NIESTABILNA / MARTWA STACJA).</p>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Data</th><th>Brakujące h</th><th>Awarie PM10</th><th>Max przerwa [h]</th><th>Kompletność</th><th>Status</th></tr></thead>
+                <tbody>
+                    
+                    <tr>
+                        <td>2019-03-13</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-05-20</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-03-15</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-03-16</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-03-18</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-03-19</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-03-20</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-03-21</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-03-23</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-03-24</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-03-25</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-03-27</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-03-29</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-03-30</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-03-31</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-04-01</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-05-19</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-03-14</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-03-12</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-04-07</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-03-11</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-02-11</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-02-12</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-02-17</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-02-18</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-02-20</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-02-21</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-02-23</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-02-24</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-02-28</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-03-01</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-03-03</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-03-04</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-03-06</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-03-08</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-03-10</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-04-06</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-04-08</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-02-08</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-04-28</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-04-30</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-05-01</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-05-02</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-05-03</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-05-04</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-05-05</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-05-06</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-05-07</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-05-08</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2019-05-09</td><td class="num-warn">24</td><td>0</td><td>24</td>
+                        <td><span class="completeness-bar-wrap"><span class="completeness-bar" style="width:0.0%"></span></span>0.0%</td>
+                        <td><span class="badge badge-err">MARTWA STACJA</span></td>
+                    </tr>
+                    
+                </tbody>
+            </table>
+        </div>
+    </div>
+</details>
+
+<!-- ═══ Podsumowanie zdarzeń ═══════════════════════════════ -->
+<details class="msection" id="zdarzenia">
+    <summary>
+        <span class="sec-emoji">📋</span>
+        <span><span class="sec-title">Podsumowanie zdarzeń</span>
+            <span class="sec-sub">typy wykrytych błędów: braki i awarie</span></span>
+        <span class="sec-chevron">›</span>
+    </summary>
+    <div class="msection-body">
+        <p class="detail-desc">Zliczenie typów zdarzeń wykrytych w danych: <strong>MISSING_HOUR</strong> (cisza stacji —
+            brak rekordu godzinowego), <strong>PM10_FAILURE</strong> (stacja działa, ale pomiar PM10 nieważny wg statusu).</p>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Typ błędu</th><th>Liczba wystąpień</th></tr></thead>
+                <tbody>
+                    <tr><td><span class="badge badge-type">MISSING_HOUR</span></td><td><strong>3893</strong></td></tr><tr><td><span class="badge badge-type">PM10_FAILURE</span></td><td><strong>24839</strong></td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</details>
+
+<!-- ═══ Log zdarzeń ════════════════════════════════════════ -->
+<details class="msection" id="log">
+    <summary>
+        <span class="sec-emoji">🧾</span>
+        <span><span class="sec-title">Log zdarzeń</span>
+            <span class="sec-sub">ostatnie 200 wykrytych zdarzeń</span></span>
+        <span class="sec-chevron">›</span>
+    </summary>
+    <div class="msection-body">
+        <p class="detail-desc">Najświeższe wykryte zdarzenia w porządku malejącym po czasie.</p>
+        <div class="table-wrap log-table-wrap">
+            <table>
+                <thead><tr><th>Czas</th><th>Typ</th></tr></thead>
+                <tbody>
+                    
+                    <tr><td class="mono">2026-04-30 15:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-03-26 08:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-03-26 07:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-03-26 06:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-26 16:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-16 13:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-16 12:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-16 11:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-16 10:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-16 09:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-16 08:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-16 07:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-16 06:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-16 05:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-16 04:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-16 03:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-16 02:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-16 01:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-16 00:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-15 23:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-15 22:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-15 21:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-15 20:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-15 19:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-15 18:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-15 17:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-15 16:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-15 15:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-15 14:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-15 13:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-15 12:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-15 11:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-15 10:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-15 09:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-15 08:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-15 07:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-15 06:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-15 05:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-15 04:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-15 03:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-15 02:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-15 01:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-15 00:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-14 23:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-14 22:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-14 21:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-14 20:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-14 19:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-14 18:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-14 17:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-14 16:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-14 15:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-14 14:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-14 13:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-14 12:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-14 11:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-14 10:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-14 09:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-14 08:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-14 07:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-14 06:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-14 05:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-14 04:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-14 03:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-14 02:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-14 01:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-14 00:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-13 23:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-13 22:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-13 21:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-13 20:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-13 19:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-13 18:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-13 17:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-13 16:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-13 15:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-13 14:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-13 13:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-13 12:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-13 11:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-13 10:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-13 09:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-13 08:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-13 07:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-13 06:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-13 05:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-13 04:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-13 03:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-13 02:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-13 01:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-13 00:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-12 23:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-12 22:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-12 21:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-12 20:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-12 19:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-12 18:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-12 17:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-12 16:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-12 15:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-12 14:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-12 13:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-12 12:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-12 11:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-12 10:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-12 09:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-12 08:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-12 07:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-12 06:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-12 05:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-12 04:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-12 03:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-12 02:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-12 01:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-12 00:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-11 23:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-11 22:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-11 21:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-11 20:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-11 19:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-11 18:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-11 17:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-11 16:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-11 15:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-11 14:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-11 13:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-11 12:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-11 11:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-11 10:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-11 09:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-11 08:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-11 07:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-11 06:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-11 05:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-11 04:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-11 03:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-11 02:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-11 01:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-11 00:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-10 23:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-10 22:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-10 21:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-10 20:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-10 19:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-10 18:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-10 17:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-10 16:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-10 15:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-10 14:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-10 13:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-10 12:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-10 11:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-10 10:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-10 09:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-10 08:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-10 07:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-10 06:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-10 05:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-10 04:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-10 03:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-10 02:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-10 01:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-10 00:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-09 23:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-09 22:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-09 21:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-09 20:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-09 19:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-09 18:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-09 17:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-09 16:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-09 15:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-09 14:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-09 13:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-09 12:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-09 11:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-09 10:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-09 09:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-09 08:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-09 07:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-09 06:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-09 05:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-09 04:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-09 03:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-09 02:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-09 01:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-09 00:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-08 23:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-08 22:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-08 21:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-08 20:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-08 19:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-08 18:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-08 17:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-08 16:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-08 15:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-08 14:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-08 13:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-08 12:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                    <tr><td class="mono">2026-02-08 11:00</td>
+                        <td><span class="badge badge-err">PM10_FAILURE</span></td></tr>
+                    
+                </tbody>
+            </table>
+        </div>
+    </div>
+</details>
+
+<!-- ═══ Legenda kodów Status;Error ═════════════════════════ -->
+<details class="msection" id="kody">
+    <summary>
+        <span class="sec-emoji">🔑</span>
+        <span><span class="sec-title">Kody Status;Error</span>
+            <span class="sec-sub">interpretacja statusów czujników przy walidacji</span></span>
+        <span class="sec-chevron">›</span>
+    </summary>
+    <div class="msection-body">
+        <p class="detail-desc">Semantyka statusu jest <strong>per czujnik</strong> (ustalona profilowaniem wartości).
+            „valid” = realny, zmienny sygnał w fizycznym zakresie; odrzucamy stuck / saturację / brak.</p>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Kod</th><th>Czujnik</th><th>Znaczenie</th></tr></thead>
+                <tbody>
+                    
+                    <tr><td><code class="code-tag">40;10</code></td><td>PM10</td>
+                        <td><span class="badge badge-ok">OK</span>Pomiar poprawny – status „valid” w analizie</td></tr>
+                    
+                    <tr><td><code class="code-tag">21;10</code></td><td>PM10</td>
+                        <td><span class="badge badge-warn">UWAGA</span>Pomiar wątpliwy (maintenance) – realny sygnał, włączony do analizy</td></tr>
+                    
+                    <tr><td><code class="code-tag">1;10</code></td><td>PM10</td>
+                        <td><span class="badge badge-warn">UWAGA</span>Niski status – realny pomiar poza zakresem, włączony do analizy</td></tr>
+                    
+                    <tr><td><code class="code-tag">0;10</code></td><td>PM10</td>
+                        <td><span class="badge badge-err">AWARIA</span>Tryb serwisowy – wartość zamrożona (stuck 19.53), odrzucana</td></tr>
+                    
+                    <tr><td><code class="code-tag">80;2</code></td><td>PM10</td>
+                        <td><span class="badge badge-err">AWARIA</span>Awaria sprzętowa – błąd kalibracji/hardware typ 2 (sentinel 985)</td></tr>
+                    
+                    <tr><td><code class="code-tag">80;1</code></td><td>PM10</td>
+                        <td><span class="badge badge-err">AWARIA</span>Awaria sprzętowa – błąd hardware typ 1</td></tr>
+                    
+                    <tr><td><code class="code-tag">80;8</code></td><td>PM10</td>
+                        <td><span class="badge badge-err">AWARIA</span>Awaria – błąd komunikacji z czujnikiem</td></tr>
+                    
+                    <tr><td><code class="code-tag">80;10</code></td><td>PM10</td>
+                        <td><span class="badge badge-err">AWARIA</span>Awaria czujnika – tryb serwisowy/maintenance</td></tr>
+                    
+                    <tr><td><code class="code-tag">99;99</code></td><td>PM10</td>
+                        <td><span class="badge badge-err">AWARIA</span>Brak danych – wartość=9999, czujnik wyłączony lub awaria</td></tr>
+                    
+                    <tr><td><code class="code-tag">02;xx</code></td><td>SO2</td>
+                        <td><span class="badge badge-ok">OK</span>Pomiar SO₂ poprawny (realny sygnał, mediana ~4 µg/m³)</td></tr>
+                    
+                    <tr><td><code class="code-tag">22;xx</code></td><td>SO2</td>
+                        <td><span class="badge badge-err">AWARIA</span>Saturacja/awaria – zamrożony klaster ~386 µg/m³, odrzucany</td></tr>
+                    
+                    <tr><td><code class="code-tag">02;xx</code></td><td>O3</td>
+                        <td><span class="badge badge-ok">OK</span>Pomiar O₃ poprawny (w tym kanale „02” nie jest błędem)</td></tr>
+                    
+                    <tr><td><code class="code-tag">00;00</code></td><td>CO</td>
+                        <td><span class="badge badge-ok">OK</span>Pomiar CO poprawny</td></tr>
+                    
+                    <tr><td><code class="code-tag">00;04</code></td><td>CO</td>
+                        <td><span class="badge badge-warn">UWAGA</span>Błąd zerowania CO / niski sygnał – pomiar niepewny</td></tr>
+                    
+                    <tr><td><code class="code-tag">02;00</code></td><td>CO</td>
+                        <td><span class="badge badge-err">AWARIA</span>Błąd kalibracji CO</td></tr>
+                    
+                </tbody>
+            </table>
+        </div>
+    </div>
+</details>
+
+
+        </section>
+</main>
+<footer class="site-footer">
+<p class="snapshot-note">Statyczna kopia aplikacji (stan danych z 06.11.2026). Wersja z serwera lokalnego, bez interakcji z serwerem.</p>
+</footer>
+</div>
+<script>
+
+(function () {
+    document.querySelectorAll('.report-menu a[href^="#"]').forEach(function (link) {
+        link.addEventListener('click', function () {
+            var sec = document.getElementById(link.getAttribute('href').slice(1));
+            if (sec) sec.open = true;
+        });
+    });
+    document.querySelectorAll('.report-menu [data-toggle-all]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var open = btn.getAttribute('data-toggle-all') === 'open';
+            document.querySelectorAll('.msection, .detail').forEach(function (d) { d.open = open; });
+        });
+    });
+})();
+
+(function () {
+  var views = ['start', 'analizy', 'awarie'];
+  function show(v) {
+    views.forEach(function (k) { document.getElementById('view-' + k).hidden = (k !== v); });
+    document.querySelectorAll('.site-nav a[data-view]').forEach(function (a) {
+      a.classList.toggle('active', a.getAttribute('data-view') === v);
+    });
+  }
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest('a[data-view]');
+    if (!a) return;
+    e.preventDefault();
+    show(a.getAttribute('data-view'));
+    try { history.replaceState(null, '', '#' + a.getAttribute('data-view')); } catch (err) {}
+    window.scrollTo(0, 0);
+  });
+  var h = (location.hash || '').slice(1);
+  show(views.indexOf(h) >= 0 ? h : 'start');
+})();
+</script>
+</body>
+</html>
